@@ -2,30 +2,33 @@
 
 import { useRef, useEffect } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
-import { OrbitControls, Environment, ContactShadows } from "@react-three/drei"
+import { OrbitControls, Environment, ContactShadows, Sky } from "@react-three/drei"
 import { useAppStore } from "@/lib/store"
 import { ReactorBuilding, TurbineHall, AuxiliaryBlocks } from "./AtuchaModel"
 import { Switchyard } from "./Switchyard"
 import { WaterAndTerrain } from "./WaterAndTerrain"
 import { TOURS, getTourAtProgress } from "@/lib/tours"
-import { AtmosphericEffects } from "./AtmosphericEffects"
-import { IndustrialLighting } from "./IndustrialLighting"
-import { PostProcessing } from "./PostProcessing"
-import { ParticleEffects } from "./ParticleEffects"
-import { EnhancedWater } from "./EnhancedWater"
-import type * as THREE from "three"
+import * as THREE from "three"
 
 interface AtuchaSceneProps {
   tourId?: string | null
 }
 
 export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
-  const { camera } = useThree()
+  const { camera, gl } = useThree()
   const { layers, sunPosition, environmentPreset, quality, exploded, tourProgress, setTourProgress } = useAppStore()
   const lightRef = useRef<THREE.DirectionalLight>(null)
   const controlsRef = useRef<any>(null)
   const tourStartTimeRef = useRef<number>(0)
   const isInTourRef = useRef<boolean>(false)
+
+  useEffect(() => {
+    gl.shadowMap.enabled = true
+    gl.shadowMap.type = THREE.PCFSoftShadowMap
+    gl.toneMapping = THREE.ACESFilmicToneMapping
+    gl.toneMappingExposure = 1.2
+    gl.outputColorSpace = THREE.SRGBColorSpace
+  }, [gl])
 
   useEffect(() => {
     if (tourId) {
@@ -48,10 +51,13 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
   }, [tourId, setTourProgress])
 
   useFrame((state) => {
-    // Animate sun position
     if (lightRef.current) {
       const angle = sunPosition * Math.PI * 2 - Math.PI / 2
-      lightRef.current.position.set(Math.cos(angle) * 100, Math.sin(angle) * 50 + 20, 0)
+      const targetX = Math.cos(angle) * 100
+      const targetY = Math.sin(angle) * 50 + 20
+      const targetZ = Math.sin(angle) * 30
+
+      lightRef.current.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 0.02)
     }
 
     // Handle tour animation
@@ -77,10 +83,11 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
 
   return (
     <>
-      <ambientLight intensity={0.3} />
+      <ambientLight intensity={0.3} color="#87CEEB" />
       <directionalLight
         ref={lightRef}
-        intensity={1.5}
+        intensity={2.5}
+        color="#FFF8DC"
         castShadow={quality !== "low"}
         shadow-mapSize-width={quality === "high" ? 4096 : quality === "medium" ? 2048 : 1024}
         shadow-mapSize-height={quality === "high" ? 4096 : quality === "medium" ? 2048 : 1024}
@@ -89,19 +96,28 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
         shadow-camera-right={150}
         shadow-camera-top={150}
         shadow-camera-bottom={-150}
-        shadow-bias={-0.0001}
-        shadow-radius={quality === "high" ? 8 : 4}
+        shadow-bias={-0.0005}
+        shadow-normalBias={0.02}
       />
 
-      <directionalLight position={[-50, 30, 50]} intensity={0.4} color="#87CEEB" />
-      <directionalLight position={[50, 20, -30]} intensity={0.3} color="#FFA500" />
+      <directionalLight position={[-50, 20, 50]} intensity={0.8} color="#B0E0E6" castShadow={false} />
 
-      <Environment preset={environmentPreset} background={true} blur={0.1} intensity={0.8} />
+      <Sky
+        distance={450000}
+        sunPosition={[
+          Math.cos(sunPosition * Math.PI * 2 - Math.PI / 2) * 100,
+          Math.sin(sunPosition * Math.PI * 2 - Math.PI / 2) * 50 + 20,
+          0,
+        ]}
+        inclination={0.49}
+        azimuth={0.25}
+        turbidity={8}
+        rayleigh={6}
+        mieCoefficient={0.005}
+        mieDirectionalG={0.8}
+      />
 
-      <AtmosphericEffects quality={quality} />
-      <ParticleEffects quality={quality} />
-
-      <IndustrialLighting quality={quality} />
+      <Environment preset={environmentPreset} background={false} environmentIntensity={0.6} />
 
       {/* Controls - disabled during tours */}
       {!tourId && (
@@ -118,7 +134,6 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
         />
       )}
 
-      {layers.terrain && <EnhancedWater exploded={exploded} quality={quality} />}
       {layers.terrain && <WaterAndTerrain exploded={exploded} />}
       {layers.reactor && <ReactorBuilding exploded={exploded} />}
       {layers.turbineHall && <TurbineHall exploded={exploded} />}
@@ -129,14 +144,13 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
         <ContactShadows
           position={[0, -0.9, 0]}
           opacity={0.6}
-          scale={150}
-          blur={quality === "high" ? 3 : 2}
+          scale={120}
+          blur={quality === "high" ? 3 : quality === "medium" ? 2 : 1}
           far={80}
           resolution={quality === "high" ? 1024 : 512}
+          color="#1a1a1a"
         />
       )}
-
-      <PostProcessing />
     </>
   )
 }
