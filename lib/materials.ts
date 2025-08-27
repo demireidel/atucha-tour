@@ -7,10 +7,9 @@ export const concreteMaterial = new MeshStandardMaterial({
   roughness: 0.9,
   metalness: 0,
   normalScale: [0.8, 0.8],
-  // Adding procedural concrete texture via placeholder
   map: textureLoader.load("/weathered-concrete-texture-with-stains-and-aging.png"),
   normalMap: textureLoader.load("/concrete-normal-map-with-surface-irregularities.png"),
-  roughnessMap: textureLoader.load("/concrete-roughness-map-with-varying-surface-finish.png"),
+  // Removed roughnessMap to reduce texture units
 })
 
 export const steelMaterial = new MeshStandardMaterial({
@@ -19,7 +18,7 @@ export const steelMaterial = new MeshStandardMaterial({
   metalness: 0.9,
   map: textureLoader.load("/brushed-steel-texture-with-industrial-wear-pattern.png"),
   normalMap: textureLoader.load("/steel-normal-map-with-scratches-and-surface-detail.png"),
-  roughnessMap: textureLoader.load("/steel-roughness-map-with-polished-and-worn-areas.png"),
+  // Removed roughnessMap to reduce texture units
 })
 
 export const stainlesssteelMaterial = new MeshStandardMaterial({
@@ -27,7 +26,7 @@ export const stainlesssteelMaterial = new MeshStandardMaterial({
   roughness: 0.15,
   metalness: 0.95,
   map: textureLoader.load("/polished-stainless-steel-with-subtle-reflections.png"),
-  normalMap: textureLoader.load("/stainless-steel-normal-map-with-fine-surface-detai.png"),
+  // Removed normalMap to reduce texture units
 })
 
 export const paintedSteelMaterial = new MeshStandardMaterial({
@@ -35,7 +34,7 @@ export const paintedSteelMaterial = new MeshStandardMaterial({
   roughness: 0.4,
   metalness: 0.1,
   map: textureLoader.load("/industrial-blue-painted-steel-with-wear-and-chippi.png"),
-  normalMap: textureLoader.load("/painted-steel-normal-map-with-paint-texture.png"),
+  // Removed normalMap to reduce texture units
 })
 
 export const copperMaterial = new MeshStandardMaterial({
@@ -43,7 +42,7 @@ export const copperMaterial = new MeshStandardMaterial({
   roughness: 0.2,
   metalness: 0.8,
   map: textureLoader.load("/oxidized-copper-pipe-texture-with-patina-and-corro.png"),
-  normalMap: textureLoader.load("/copper-pipe-normal-map-with-surface-oxidation.png"),
+  // Removed normalMap to reduce texture units
 })
 
 export const insulationMaterial = new MeshStandardMaterial({
@@ -51,7 +50,7 @@ export const insulationMaterial = new MeshStandardMaterial({
   roughness: 0.8,
   metalness: 0,
   map: textureLoader.load("/white-thermal-insulation-material-with-fabric-text.png"),
-  normalMap: textureLoader.load("/insulation-normal-map-with-fabric-weave-pattern.png"),
+  // Removed normalMap to reduce texture units
 })
 
 export const metalMaterial = steelMaterial
@@ -64,25 +63,21 @@ export const waterMaterial = new MeshPhysicalMaterial({
   thickness: 0.8,
   transparent: true,
   opacity: 0.85,
-  normalMap: textureLoader.load("/water-surface-normal-map-with-ripples-and-waves.png"),
   clearcoat: 1.0,
   clearcoatRoughness: 0.1,
+  // Removed normalMap to reduce texture units
 })
 
 export const terrainMaterial = new MeshStandardMaterial({
   color: "#4A5D23",
   roughness: 0.9,
   metalness: 0,
-  map: textureLoader.load("/placeholder.svg?height=1024&width=1024"),
-  normalMap: textureLoader.load("/placeholder.svg?height=1024&width=1024"),
 })
 
 export const roadMaterial = new MeshStandardMaterial({
   color: "#2D2D2D",
   roughness: 0.8,
   metalness: 0,
-  map: textureLoader.load("/placeholder.svg?height=1024&width=1024"),
-  normalMap: textureLoader.load("/placeholder.svg?height=1024&width=1024"),
 })
 
 export const glassMaterial = new MeshPhysicalMaterial({
@@ -101,18 +96,16 @@ export const rubberMaterial = new MeshStandardMaterial({
   color: "#1a1a1a",
   roughness: 0.9,
   metalness: 0,
-  map: textureLoader.load("/placeholder.svg?height=512&width=512"),
 })
 
 export const electricalMaterial = new MeshStandardMaterial({
   color: "#2a2a2a",
   roughness: 0.6,
   metalness: 0.2,
-  map: textureLoader.load("/placeholder.svg?height=512&width=512"),
   emissive: "#004400",
   emissiveIntensity: 0.1,
 })
-;[concreteMaterial, steelMaterial, terrainMaterial, roadMaterial].forEach((material) => {
+;[concreteMaterial, steelMaterial].forEach((material) => {
   if (material.map) {
     material.map.wrapS = RepeatWrapping
     material.map.wrapT = RepeatWrapping

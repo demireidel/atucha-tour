@@ -11,6 +11,7 @@ import {
   DepthOfField,
   ChromaticAberration,
   Vignette,
+  NormalPass,
 } from "@react-three/postprocessing"
 import { BlendFunction } from "postprocessing"
 
@@ -19,6 +20,10 @@ export function PostProcessing() {
 
   const effects = useMemo(() => {
     const effectsArray = []
+
+    if (quality === "medium" || quality === "high") {
+      effectsArray.push(<NormalPass key="normal" />)
+    }
 
     switch (quality) {
       case "low":
