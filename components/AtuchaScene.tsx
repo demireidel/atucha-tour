@@ -4,7 +4,7 @@ import { useRef, useEffect, useCallback, useMemo } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls, Environment, ContactShadows, Sky } from "@react-three/drei"
 import { useAppStore } from "@/lib/store"
-import { ReactorBuilding, TurbineHall, AuxiliaryBlocks } from "./AtuchaModel"
+import { LazyReactorBuilding, LazyTurbineHall, LazyAuxiliaryBlocks } from "./LazyAtuchaModel"
 import { Switchyard } from "./Switchyard"
 import { WaterAndTerrain } from "./WaterAndTerrain"
 import { TOURS, getTourAtProgress } from "@/lib/tours"
@@ -39,7 +39,17 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
     gl.toneMapping = THREE.ACESFilmicToneMapping
     gl.toneMappingExposure = 1.2
     gl.outputColorSpace = THREE.SRGBColorSpace
-  }, [gl])
+
+    // Optimizaciones adicionales basadas en calidad
+    if (quality === "low") {
+      gl.setPixelRatio(Math.min(window.devicePixelRatio, 1))
+      gl.shadowMap.enabled = false
+    } else if (quality === "medium") {
+      gl.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
+    } else {
+      gl.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    }
+  }, [gl, quality])
 
   useEffect(() => {
     if (tourId) {
@@ -159,9 +169,9 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
       )}
 
       {layers.terrain && <WaterAndTerrain exploded={exploded} />}
-      {layers.reactor && <ReactorBuilding exploded={exploded} />}
-      {layers.turbineHall && <TurbineHall exploded={exploded} />}
-      {layers.auxiliary && <AuxiliaryBlocks exploded={exploded} />}
+      {layers.reactor && <LazyReactorBuilding exploded={exploded} quality={quality} useOptimized={quality === "low"} />}
+      {layers.turbineHall && <LazyTurbineHall exploded={exploded} />}
+      {layers.auxiliary && <LazyAuxiliaryBlocks exploded={exploded} />}
       {layers.switchyard && <Switchyard exploded={exploded} />}
 
       {quality !== "low" && (
