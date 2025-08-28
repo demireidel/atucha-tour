@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useCallback, useMemo } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
 import { OrbitControls, Environment, ContactShadows, Sky } from "@react-three/drei"
 import { useAppStore } from "@/lib/store"
@@ -21,6 +21,17 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
   const controlsRef = useRef<any>(null)
   const tourStartTimeRef = useRef<number>(0)
   const isInTourRef = useRef<boolean>(false)
+  const isMountedRef = useRef<boolean>(true)
+  const performanceRef = useRef({ fps: 60, triangles: 0 })
+
+  const shadowMapSize = useMemo(() => {
+    return quality === "high" ? 4096 : quality === "medium" ? 2048 : 1024
+  }, [quality])
+
+  const sunPositionVector = useMemo(() => {
+    const angle = sunPosition * Math.PI * 2 - Math.PI / 2
+    return [Math.cos(angle) * 100, Math.sin(angle) * 50 + 20, Math.sin(angle) * 30]
+  }, [sunPosition])
 
   useEffect(() => {
     gl.shadowMap.enabled = true
@@ -50,36 +61,53 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
     }
   }, [tourId, setTourProgress])
 
-  useFrame((state) => {
-    if (lightRef.current) {
-      const angle = sunPosition * Math.PI * 2 - Math.PI / 2
-      const targetX = Math.cos(angle) * 100
-      const targetY = Math.sin(angle) * 50 + 20
-      const targetZ = Math.sin(angle) * 30
-
-      lightRef.current.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 0.02)
+  useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
     }
+  }, [])
 
-    // Handle tour animation
-    if (isInTourRef.current && tourId) {
-      const currentTour = TOURS.find((t) => t.id === tourId)
-      if (currentTour) {
-        const elapsed = (Date.now() - tourStartTimeRef.current) / 1000 // Convert to seconds
-        const progress = Math.min(elapsed / currentTour.totalDuration, 1)
+  const currentTour = useMemo(() => {
+    return tourId ? TOURS.find((t) => t.id === tourId) : null
+  }, [tourId])
 
-        setTourProgress(progress)
+  useFrame(
+    useCallback(
+      (state) => {
+        // Early return if component is unmounted
+        if (!isMountedRef.current) return
 
-        const tourState = getTourAtProgress(currentTour, progress)
+        const deltaTime = state.clock.getDelta()
+        const skipFrame = deltaTime > 0.033 // Skip if frame time > 33ms (30 FPS)
 
-        // Smoothly move camera
-        camera.position.lerp(tourState.position, 0.02)
-        camera.lookAt(tourState.target)
+        performanceRef.current.triangles = state.gl.info.render.triangles
 
-        // Update camera matrix
-        camera.updateMatrixWorld()
-      }
-    }
-  })
+        if (lightRef.current && !skipFrame) {
+          const [targetX, targetY, targetZ] = sunPositionVector
+          lightRef.current.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 0.02)
+        }
+
+        // Handle tour animation
+        if (isInTourRef.current && tourId && currentTour && !skipFrame) {
+          const elapsed = (Date.now() - tourStartTimeRef.current) / 1000
+          const progress = Math.min(elapsed / currentTour.totalDuration, 1)
+
+          setTourProgress(progress)
+
+          const tourState = getTourAtProgress(currentTour, progress)
+
+          // Smoothly move camera
+          camera.position.lerp(tourState.position, 0.02)
+          camera.lookAt(tourState.target)
+
+          // Update camera matrix
+          camera.updateMatrixWorld()
+        }
+      },
+      [sunPositionVector, tourId, currentTour, camera, setTourProgress],
+    ),
+  )
 
   return (
     <>
@@ -89,8 +117,8 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
         intensity={2.5}
         color="#FFF8DC"
         castShadow={quality !== "low"}
-        shadow-mapSize-width={quality === "high" ? 4096 : quality === "medium" ? 2048 : 1024}
-        shadow-mapSize-height={quality === "high" ? 4096 : quality === "medium" ? 2048 : 1024}
+        shadow-mapSize-width={shadowMapSize}
+        shadow-mapSize-height={shadowMapSize}
         shadow-camera-far={300}
         shadow-camera-left={-150}
         shadow-camera-right={150}
@@ -104,11 +132,7 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
 
       <Sky
         distance={450000}
-        sunPosition={[
-          Math.cos(sunPosition * Math.PI * 2 - Math.PI / 2) * 100,
-          Math.sin(sunPosition * Math.PI * 2 - Math.PI / 2) * 50 + 20,
-          0,
-        ]}
+        sunPosition={sunPositionVector}
         inclination={0.49}
         azimuth={0.25}
         turbidity={8}

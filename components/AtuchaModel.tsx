@@ -1,66 +1,110 @@
 "use client"
 
-import { useRef, useMemo } from "react"
+import { useRef, useMemo, memo } from "react"
 import type * as THREE from "three"
 import {
   concreteMaterial,
   steelMaterial,
   stainlesssteelMaterial,
   paintedSteelMaterial,
-  insulationMaterial,
   glassMaterial,
-  electricalMaterial,
 } from "@/lib/materials"
+
+const REACTOR_CONFIG = {
+  diameter: 24,
+  height: 30,
+  domeHeight: 12,
+  ribCount: 16,
+  ringCount: 6,
+  fuelAssemblies: 157,
+  controlRods: 37,
+} as const
+
+const TURBINE_CONFIG = {
+  hallLength: 80,
+  hallWidth: 25,
+  hallHeight: 18,
+  skylightCount: 8,
+  roofPitch: 0.1,
+  turbineCount: 3,
+} as const
+
+const AUX_CONFIG = {
+  blockCount: 6,
+  blockSpread: 40,
+  minHeight: 8,
+  maxHeight: 20,
+} as const
 
 interface ReactorBuildingProps {
   exploded?: boolean
 }
 
-export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
+export const ReactorBuilding = memo(function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
   const meshRef = useRef<THREE.Group>(null)
 
-  const reactorDiameter = 24
-  const reactorHeight = 30
-  const domeHeight = 12
-  const ribCount = 16
-  const ringCount = 6
+  const explodeOffset = useMemo(() => (exploded ? [0, 10, 0] : [0, 0, 0]), [exploded])
 
-  const explodeOffset = exploded ? [0, 10, 0] : [0, 0, 0]
-
-  // Generate vertical ribs
   const ribs = useMemo(() => {
     const ribs = []
-
-    for (let i = 0; i < ribCount; i++) {
-      const angle = (i / ribCount) * Math.PI * 2
-      const x = Math.cos(angle) * (reactorDiameter / 2 + 0.3)
-      const z = Math.sin(angle) * (reactorDiameter / 2 + 0.3)
-      ribs.push({ position: [x, reactorHeight / 2, z], rotation: [0, angle, 0] })
+    for (let i = 0; i < REACTOR_CONFIG.ribCount; i++) {
+      const angle = (i / REACTOR_CONFIG.ribCount) * Math.PI * 2
+      const x = Math.cos(angle) * (REACTOR_CONFIG.diameter / 2 + 0.3)
+      const z = Math.sin(angle) * (REACTOR_CONFIG.diameter / 2 + 0.3)
+      ribs.push({ position: [x, REACTOR_CONFIG.height / 2, z], rotation: [0, angle, 0] })
     }
     return ribs
-  }, [reactorDiameter, reactorHeight, ribCount])
+  }, [])
 
-  // Generate ring seams
   const rings = useMemo(() => {
     const rings = []
-    for (let i = 1; i < ringCount; i++) {
-      const y = (i / ringCount) * reactorHeight
-      rings.push({ position: [0, y, 0], scale: [reactorDiameter + 0.5, 0.3, reactorDiameter + 0.5] })
+    for (let i = 1; i < REACTOR_CONFIG.ringCount; i++) {
+      const y = (i / REACTOR_CONFIG.ringCount) * REACTOR_CONFIG.height
+      rings.push({ position: [0, y, 0], scale: [REACTOR_CONFIG.diameter + 0.5, 0.3, REACTOR_CONFIG.diameter + 0.5] })
     }
     return rings
-  }, [reactorDiameter, reactorHeight, ringCount])
+  }, [])
+
+  const fuelAssemblyPositions = useMemo(() => {
+    const positions = []
+    for (let i = 0; i < REACTOR_CONFIG.fuelAssemblies; i++) {
+      const row = Math.floor(i / 13)
+      const col = i % 13
+      const x = (col - 6) * 1.2
+      const z = (row - 6) * 1.2
+      const distance = Math.sqrt(x * x + z * z)
+      if (distance <= 7) {
+        positions.push([x, REACTOR_CONFIG.height / 2, z])
+      }
+    }
+    return positions
+  }, [])
+
+  const controlRodPositions = useMemo(() => {
+    const positions = []
+    for (let i = 0; i < REACTOR_CONFIG.controlRods; i++) {
+      const row = Math.floor(i / 6)
+      const col = i % 6
+      const x = (col - 2.5) * 2.5
+      const z = (row - 3) * 2.5
+      positions.push([x, REACTOR_CONFIG.height + REACTOR_CONFIG.domeHeight + 2, z])
+    }
+    return positions
+  }, [])
 
   return (
     <group ref={meshRef} position={explodeOffset}>
       {/* Main cylindrical containment */}
-      <mesh position={[0, reactorHeight / 2, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[reactorDiameter / 2, reactorDiameter / 2, reactorHeight, 32]} />
+      <mesh position={[0, REACTOR_CONFIG.height / 2, 0]} castShadow receiveShadow>
+        <cylinderGeometry
+          args={[REACTOR_CONFIG.diameter / 2, REACTOR_CONFIG.diameter / 2, REACTOR_CONFIG.height, 32]}
+        />
         <primitive object={concreteMaterial} />
       </mesh>
 
       {/* Hemispherical dome */}
-      <mesh position={[0, reactorHeight + domeHeight / 2, 0]} castShadow>
-        <sphereGeometry args={[reactorDiameter / 2, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
+      <mesh position={[0, REACTOR_CONFIG.height + REACTOR_CONFIG.domeHeight / 2, 0]} castShadow>
+        <sphereGeometry args={[REACTOR_CONFIG.diameter / 2, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2]} />
         <primitive object={concreteMaterial} />
       </mesh>
 
@@ -72,7 +116,7 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
           rotation={rib.rotation as [number, number, number]}
           castShadow
         >
-          <boxGeometry args={[0.5, reactorHeight, 0.8]} />
+          <boxGeometry args={[0.5, REACTOR_CONFIG.height, 0.8]} />
           <primitive object={steelMaterial} />
         </mesh>
       ))}
@@ -90,250 +134,42 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
         </mesh>
       ))}
 
-      {/* Reactor pressure vessel (internal) */}
-      <mesh position={[0, reactorHeight / 2, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[reactorDiameter / 2 - 2, reactorDiameter / 2 - 2, reactorHeight - 4, 32]} />
-        <primitive object={stainlesssteelMaterial} />
-      </mesh>
+      <instancedMesh args={[undefined, undefined, fuelAssemblyPositions.length]} castShadow>
+        <boxGeometry args={[0.8, REACTOR_CONFIG.height - 8, 0.8]} />
+        <meshStandardMaterial color="#FFD700" roughness={0.3} metalness={0.9} />
+        {fuelAssemblyPositions.map((position, index) => (
+          <group key={`fuel-${index}`} position={position as [number, number, number]} />
+        ))}
+      </instancedMesh>
 
       {/* Control rod drive mechanisms */}
       <group>
-        {Array.from({ length: 37 }, (_, i) => {
-          const row = Math.floor(i / 6)
-          const col = i % 6
-          const x = (col - 2.5) * 2.5
-          const z = (row - 3) * 2.5
-          return (
-            <mesh key={`control-rod-${i}`} position={[x, reactorHeight + domeHeight + 2, z]} castShadow>
-              <cylinderGeometry args={[0.15, 0.15, 4, 8]} />
-              <primitive object={stainlesssteelMaterial} />
-            </mesh>
-          )
-        })}
-      </group>
-
-      {/* Detailed cooling system with multiple loops */}
-      <group>
-        {Array.from({ length: 4 }, (_, i) => {
-          const angle = (i / 4) * Math.PI * 2
-          const radius = reactorDiameter / 2 + 3
-          const x = Math.cos(angle) * radius
-          const z = Math.sin(angle) * radius
-          return (
-            <group key={`cooling-loop-${i}`}>
-              {/* Primary coolant pipe */}
-              <mesh position={[x, 8, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
-                <cylinderGeometry args={[0.8, 0.8, 15, 16]} />
-                <primitive object={steelMaterial} />
-              </mesh>
-
-              {/* Secondary coolant pipe */}
-              <mesh position={[x, 12, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
-                <cylinderGeometry args={[0.6, 0.6, 12, 16]} />
-                <primitive object={paintedSteelMaterial} />
-              </mesh>
-
-              {/* Pipe insulation */}
-              <mesh position={[x, 8, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
-                <cylinderGeometry args={[1.0, 1.0, 15, 16]} />
-                <primitive object={insulationMaterial} />
-              </mesh>
-
-              {/* Valve assemblies */}
-              <mesh position={[x - 6, 8, z]} castShadow>
-                <boxGeometry args={[2, 2, 2]} />
-                <primitive object={paintedSteelMaterial} />
-              </mesh>
-
-              {/* Pump housing */}
-              <mesh position={[x - 10, 4, z]} castShadow>
-                <cylinderGeometry args={[1.5, 1.5, 3, 16]} />
-                <primitive object={steelMaterial} />
-              </mesh>
-
-              {/* Pipe supports with detailed brackets */}
-              {Array.from({ length: 5 }, (_, j) => (
-                <mesh key={`support-${j}`} position={[x - 3 + j * 3, 2, z]} castShadow>
-                  <boxGeometry args={[0.5, 4, 1]} />
-                  <primitive object={steelMaterial} />
-                </mesh>
-              ))}
-            </group>
-          )
-        })}
-      </group>
-
-      {/* Enhanced steam generator buildings with detailed internals */}
-      <group>
-        {Array.from({ length: 2 }, (_, i) => {
-          const x = i === 0 ? -18 : 18
-          return (
-            <group key={`steam-generator-complex-${i}`}>
-              {/* Main steam generator vessel */}
-              <mesh position={[x, 6, 0]} castShadow receiveShadow>
-                <cylinderGeometry args={[3, 3, 12, 16]} />
-                <primitive object={steelMaterial} />
-              </mesh>
-
-              {/* Steam generator internals */}
-              <mesh position={[x, 6, 0]} castShadow>
-                <cylinderGeometry args={[2.5, 2.5, 11, 16]} />
-                <primitive object={stainlesssteelMaterial} />
-              </mesh>
-
-              {/* Steam outlet pipes */}
-              <mesh position={[x, 12, 0]} rotation={[Math.PI / 2, 0, 0]} castShadow>
-                <cylinderGeometry args={[0.8, 0.8, 8, 16]} />
-                <primitive object={steelMaterial} />
-              </mesh>
-
-              {/* Feedwater inlet */}
-              <mesh position={[x, 2, 3]} rotation={[0, 0, Math.PI / 2]} castShadow>
-                <cylinderGeometry args={[0.6, 0.6, 6, 16]} />
-                <primitive object={paintedSteelMaterial} />
-              </mesh>
-
-              {/* Steam generator platform */}
-              <mesh position={[x, 12.5, 0]} castShadow receiveShadow>
-                <cylinderGeometry args={[4, 4, 0.5, 16]} />
-                <primitive object={steelMaterial} />
-              </mesh>
-
-              {/* Access ladders */}
-              <mesh position={[x + 3.5, 6, 0]} castShadow>
-                <boxGeometry args={[0.3, 12, 0.8]} />
-                <primitive object={steelMaterial} />
-              </mesh>
-            </group>
-          )
-        })}
-      </group>
-
-      {/* Detailed control room with windows and equipment */}
-      <group>
-        <mesh position={[0, 8, -reactorDiameter / 2 - 8]} castShadow receiveShadow>
-          <boxGeometry args={[12, 6, 8]} />
-          <primitive object={concreteMaterial} />
-        </mesh>
-
-        {/* Control room windows */}
-        <mesh position={[0, 9, -reactorDiameter / 2 - 4.1]} castShadow>
-          <boxGeometry args={[10, 2, 0.2]} />
-          <primitive object={glassMaterial} />
-        </mesh>
-
-        {/* Control panels inside */}
-        {Array.from({ length: 3 }, (_, i) => (
-          <mesh key={`control-panel-${i}`} position={[(i - 1) * 3, 6, -reactorDiameter / 2 - 6]} castShadow>
-            <boxGeometry args={[2, 2, 1]} />
-            <primitive object={electricalMaterial} />
+        {controlRodPositions.map((position, index) => (
+          <mesh key={`control-rod-${index}`} position={position as [number, number, number]} castShadow>
+            <cylinderGeometry args={[0.15, 0.15, 4, 8]} />
+            <primitive object={stainlesssteelMaterial} />
           </mesh>
         ))}
-
-        {/* Ventilation system */}
-        <mesh position={[0, 11.5, -reactorDiameter / 2 - 8]} castShadow>
-          <boxGeometry args={[8, 1, 4]} />
-          <primitive object={steelMaterial} />
-        </mesh>
       </group>
 
-      {/* Enhanced external stairways with railings */}
-      <group>
-        {Array.from({ length: 3 }, (_, i) => {
-          const angle = (i / 3) * Math.PI * 2
-          const x = Math.cos(angle) * (reactorDiameter / 2 + 1)
-          const z = Math.sin(angle) * (reactorDiameter / 2 + 1)
-          return (
-            <group key={`stairway-complex-${i}`}>
-              {/* Main stairway structure */}
-              <mesh position={[x, reactorHeight / 2, z]} castShadow>
-                <boxGeometry args={[1, reactorHeight, 0.3]} />
-                <meshStandardMaterial color="#4A5568" roughness={0.9} metalness={0.8} />
-              </mesh>
-
-              {/* Stair railings */}
-              <mesh position={[x + 0.7, reactorHeight / 2, z]} castShadow>
-                <boxGeometry args={[0.1, reactorHeight, 0.3]} />
-                <meshStandardMaterial color="#2D3748" roughness={0.8} metalness={0.7} />
-              </mesh>
-              <mesh position={[x - 0.7, reactorHeight / 2, z]} castShadow>
-                <boxGeometry args={[0.1, reactorHeight, 0.3]} />
-                <meshStandardMaterial color="#2D3748" roughness={0.8} metalness={0.7} />
-              </mesh>
-
-              {/* Landing platforms */}
-              {Array.from({ length: 4 }, (_, j) => (
-                <mesh key={`landing-${j}`} position={[x, 5 + j * 6, z]} castShadow receiveShadow>
-                  <boxGeometry args={[2, 0.3, 2]} />
-                  <meshStandardMaterial color="#4B5563" roughness={0.7} metalness={0.6} />
-                </mesh>
-              ))}
-            </group>
-          )
-        })}
-      </group>
-
-      {/* Containment spray system */}
-      <group>
-        {Array.from({ length: 8 }, (_, i) => {
-          const angle = (i / 8) * Math.PI * 2
-          const x = Math.cos(angle) * (reactorDiameter / 2 - 2)
-          const z = Math.sin(angle) * (reactorDiameter / 2 - 2)
-          return (
-            <mesh key={`spray-nozzle-${i}`} position={[x, reactorHeight - 3, z]} castShadow>
-              <cylinderGeometry args={[0.2, 0.2, 1, 8]} />
-              <meshStandardMaterial color="#E53E3E" roughness={0.4} metalness={0.7} />
-            </mesh>
-          )
-        })}
-      </group>
-
-      {/* Emergency diesel generators building */}
-      <mesh position={[-30, 4, -15]} castShadow receiveShadow>
-        <boxGeometry args={[15, 8, 10]} />
-        <meshStandardMaterial color="#9CA3AF" roughness={0.6} metalness={0.3} />
-      </mesh>
-
-      {/* Fuel handling building */}
-      <mesh position={[25, 6, -20]} castShadow receiveShadow>
-        <boxGeometry args={[12, 12, 15]} />
-        <meshStandardMaterial color="#A1A1AA" roughness={0.7} metalness={0.3} />
-      </mesh>
-
-      {/* Reactor pressure vessel internals with fuel assemblies */}
-      <group>
-        {Array.from({ length: 157 }, (_, i) => {
-          const row = Math.floor(i / 13)
-          const col = i % 13
-          const x = (col - 6) * 1.2
-          const z = (row - 6) * 1.2
-          const distance = Math.sqrt(x * x + z * z)
-          if (distance > 7) return null
-          return (
-            <mesh key={`fuel-assembly-${i}`} position={[x, reactorHeight / 2, z]} castShadow>
-              <boxGeometry args={[0.8, reactorHeight - 8, 0.8]} />
-              <meshStandardMaterial color="#FFD700" roughness={0.3} metalness={0.9} />
-            </mesh>
-          )
-        })}
-      </group>
-
-      {/* Reactor vessel head with detailed penetrations */}
-      <mesh position={[0, reactorHeight + 2, 0]} castShadow>
-        <cylinderGeometry args={[reactorDiameter / 2 - 1.5, reactorDiameter / 2 - 1.5, 4, 32]} />
-        <meshStandardMaterial color="#2D3748" roughness={0.2} metalness={0.9} />
+      {/* Reactor pressure vessel (internal) */}
+      <mesh position={[0, REACTOR_CONFIG.height / 2, 0]} castShadow receiveShadow>
+        <cylinderGeometry
+          args={[REACTOR_CONFIG.diameter / 2 - 2, REACTOR_CONFIG.diameter / 2 - 2, REACTOR_CONFIG.height - 4, 32]}
+        />
+        <primitive object={stainlesssteelMaterial} />
       </mesh>
 
       {/* Control rod guide tubes */}
       <group>
-        {Array.from({ length: 37 }, (_, i) => {
+        {Array.from({ length: REACTOR_CONFIG.controlRods }, (_, i) => {
           const row = Math.floor(i / 6)
           const col = i % 6
           const x = (col - 2.5) * 2.5
           const z = (row - 3) * 2.5
           return (
-            <mesh key={`guide-tube-${i}`} position={[x, reactorHeight / 2, z]} castShadow>
-              <cylinderGeometry args={[0.2, 0.2, reactorHeight - 4, 8]} />
+            <mesh key={`guide-tube-${i}`} position={[x, REACTOR_CONFIG.height / 2, z]} castShadow>
+              <cylinderGeometry args={[0.2, 0.2, REACTOR_CONFIG.height - 4, 8]} />
               <meshStandardMaterial color="#4A5568" roughness={0.3} metalness={0.8} />
             </mesh>
           )
@@ -344,7 +180,7 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
       <group>
         {Array.from({ length: 4 }, (_, i) => {
           const angle = (i / 4) * Math.PI * 2
-          const radius = reactorDiameter / 2 + 8
+          const radius = REACTOR_CONFIG.diameter / 2 + 8
           const x = Math.cos(angle) * radius
           const z = Math.sin(angle) * radius
           return (
@@ -397,7 +233,7 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
       </group>
 
       {/* Pressurizer with detailed internals */}
-      <group position={[reactorDiameter / 2 + 15, 0, 0]}>
+      <group position={[REACTOR_CONFIG.diameter / 2 + 15, 0, 0]}>
         {/* Main pressurizer vessel */}
         <mesh position={[0, 12, 0]} castShadow receiveShadow>
           <cylinderGeometry args={[2.5, 2.5, 20, 16]} />
@@ -469,10 +305,10 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
         {/* Neutron flux detectors */}
         {Array.from({ length: 16 }, (_, i) => {
           const angle = (i / 16) * Math.PI * 2
-          const x = Math.cos(angle) * (reactorDiameter / 2 + 0.5)
-          const z = Math.sin(angle) * (reactorDiameter / 2 + 0.5)
+          const x = Math.cos(angle) * (REACTOR_CONFIG.diameter / 2 + 0.5)
+          const z = Math.sin(angle) * (REACTOR_CONFIG.diameter / 2 + 0.5)
           return (
-            <mesh key={`neutron-detector-${i}`} position={[x, reactorHeight / 2, z]} castShadow>
+            <mesh key={`neutron-detector-${i}`} position={[x, REACTOR_CONFIG.height / 2, z]} castShadow>
               <cylinderGeometry args={[0.1, 0.1, 2, 8]} />
               <meshStandardMaterial color="#FBBF24" roughness={0.3} metalness={0.8} />
             </mesh>
@@ -482,7 +318,7 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
         {/* Temperature sensors */}
         {Array.from({ length: 32 }, (_, i) => {
           const angle = (i / 32) * Math.PI * 2
-          const radius = reactorDiameter / 2 - 1
+          const radius = REACTOR_CONFIG.diameter / 2 - 1
           const x = Math.cos(angle) * radius
           const z = Math.sin(angle) * radius
           const y = 5 + (i % 4) * 5
@@ -497,8 +333,8 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
         {/* Pressure transmitters */}
         {Array.from({ length: 12 }, (_, i) => {
           const angle = (i / 12) * Math.PI * 2
-          const x = Math.cos(angle) * (reactorDiameter / 2 + 2)
-          const z = Math.sin(angle) * (reactorDiameter / 2 + 2)
+          const x = Math.cos(angle) * (REACTOR_CONFIG.diameter / 2 + 2)
+          const z = Math.sin(angle) * (REACTOR_CONFIG.diameter / 2 + 2)
           return (
             <mesh key={`pressure-transmitter-${i}`} position={[x, 8, z]} castShadow>
               <boxGeometry args={[0.3, 0.3, 0.3]} />
@@ -511,19 +347,19 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
       {/* Reactor building crane with maximum detail */}
       <group>
         {/* Main crane structure */}
-        <mesh position={[0, reactorHeight + domeHeight - 2, 0]} castShadow>
-          <cylinderGeometry args={[reactorDiameter / 2 - 2, reactorDiameter / 2 - 2, 2, 32]} />
+        <mesh position={[0, REACTOR_CONFIG.height + REACTOR_CONFIG.domeHeight - 2, 0]} castShadow>
+          <cylinderGeometry args={[REACTOR_CONFIG.diameter / 2 - 2, REACTOR_CONFIG.diameter / 2 - 2, 2, 32]} />
           <meshStandardMaterial color="#DC2626" roughness={0.4} metalness={0.7} />
         </mesh>
 
         {/* Crane trolley system */}
-        <mesh position={[8, reactorHeight + domeHeight - 3, 0]} castShadow>
+        <mesh position={[8, REACTOR_CONFIG.height + REACTOR_CONFIG.domeHeight - 3, 0]} castShadow>
           <boxGeometry args={[4, 1.5, 2]} />
           <meshStandardMaterial color="#1F2937" roughness={0.4} metalness={0.8} />
         </mesh>
 
         {/* Crane hook and rigging */}
-        <mesh position={[8, reactorHeight + domeHeight - 8, 0]} castShadow>
+        <mesh position={[8, REACTOR_CONFIG.height + REACTOR_CONFIG.domeHeight - 8, 0]} castShadow>
           <cylinderGeometry args={[0.4, 0.4, 1.5, 8]} />
           <meshStandardMaterial color="#374151" roughness={0.3} metalness={0.9} />
         </mesh>
@@ -532,7 +368,7 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
         {Array.from({ length: 4 }, (_, i) => (
           <mesh
             key={`crane-cable-${i}`}
-            position={[8 + (i - 1.5) * 0.5, reactorHeight + domeHeight - 5.5, 0]}
+            position={[8 + (i - 1.5) * 0.5, REACTOR_CONFIG.height + REACTOR_CONFIG.domeHeight - 5.5, 0]}
             castShadow
           >
             <cylinderGeometry args={[0.03, 0.03, 5, 8]} />
@@ -569,66 +405,68 @@ export function ReactorBuilding({ exploded = false }: ReactorBuildingProps) {
       </group>
     </group>
   )
-}
+})
 
 interface TurbineHallProps {
   exploded?: boolean
 }
 
-export function TurbineHall({ exploded = false }: TurbineHallProps) {
-  const hallLength = 80
-  const hallWidth = 25
-  const hallHeight = 18
-  const skylightCount = 8
-  const roofPitch = 0.1
+export const TurbineHall = memo(function TurbineHall({ exploded = false }: TurbineHallProps) {
+  const explodeOffset = useMemo(() => (exploded ? [15, 5, 0] : [0, 0, 0]), [exploded])
 
-  const explodeOffset = exploded ? [15, 5, 0] : [0, 0, 0]
-
-  // Generate skylight strips
   const skylights = useMemo(() => {
     const skylights = []
-    for (let i = 0; i < skylightCount; i++) {
-      const x = (i / (skylightCount - 1) - 0.5) * (hallLength - 5)
-      skylights.push({ position: [x, hallHeight + roofPitch * 2, 0] })
+    for (let i = 0; i < TURBINE_CONFIG.skylightCount; i++) {
+      const x = (i / (TURBINE_CONFIG.skylightCount - 1) - 0.5) * (TURBINE_CONFIG.hallLength - 5)
+      skylights.push({ position: [x, TURBINE_CONFIG.hallHeight + TURBINE_CONFIG.roofPitch * 2, 0] })
     }
     return skylights
-  }, [hallLength, hallHeight, skylightCount, roofPitch])
+  }, [])
 
   return (
     <group position={[50, ...explodeOffset]}>
       {/* Main hall structure */}
-      <mesh position={[0, hallHeight / 2, 0]} castShadow receiveShadow>
-        <boxGeometry args={[hallLength, hallHeight, hallWidth]} />
+      <mesh position={[0, TURBINE_CONFIG.hallHeight / 2, 0]} castShadow receiveShadow>
+        <boxGeometry args={[TURBINE_CONFIG.hallLength, TURBINE_CONFIG.hallHeight, TURBINE_CONFIG.hallWidth]} />
         <primitive object={steelMaterial} />
       </mesh>
 
       {/* Gabled roof */}
-      <mesh position={[0, hallHeight + (roofPitch * hallWidth) / 2, 0]} castShadow>
-        <boxGeometry args={[hallLength, roofPitch * hallWidth, hallWidth * 1.1]} />
+      <mesh
+        position={[0, TURBINE_CONFIG.hallHeight + (TURBINE_CONFIG.roofPitch * TURBINE_CONFIG.hallWidth) / 2, 0]}
+        castShadow
+      >
+        <boxGeometry
+          args={[
+            TURBINE_CONFIG.hallLength,
+            TURBINE_CONFIG.roofPitch * TURBINE_CONFIG.hallWidth,
+            TURBINE_CONFIG.hallWidth * 1.1,
+          ]}
+        />
         <primitive object={steelMaterial} />
       </mesh>
 
       {/* Skylight strips */}
       {skylights.map((skylight, index) => (
         <mesh key={`skylight-${index}`} position={skylight.position as [number, number, number]} castShadow>
-          <boxGeometry args={[3, 0.5, hallWidth * 1.2]} />
+          <boxGeometry args={[3, 0.5, TURBINE_CONFIG.hallWidth * 1.2]} />
           <primitive object={glassMaterial} />
         </mesh>
       ))}
 
       {/* Side ventilation grilles */}
-      <mesh position={[0, hallHeight * 0.8, hallWidth / 2 + 0.1]} castShadow>
-        <boxGeometry args={[hallLength * 0.8, 2, 0.2]} />
+      <mesh position={[0, TURBINE_CONFIG.hallHeight * 0.8, TURBINE_CONFIG.hallWidth / 2 + 0.1]} castShadow>
+        <boxGeometry args={[TURBINE_CONFIG.hallLength * 0.8, 2, 0.2]} />
         <meshStandardMaterial color="#6B7280" roughness={0.6} metalness={0.5} />
       </mesh>
-      <mesh position={[0, hallHeight * 0.8, -hallWidth / 2 - 0.1]} castShadow>
-        <boxGeometry args={[hallLength * 0.8, 2, 0.2]} />
+      <mesh position={[0, TURBINE_CONFIG.hallHeight * 0.8, -TURBINE_CONFIG.hallWidth / 2 - 0.1]} castShadow>
+        <boxGeometry args={[TURBINE_CONFIG.hallLength * 0.8, 2, 0.2]} />
         <meshStandardMaterial color="#6B7280" roughness={0.6} metalness={0.5} />
       </mesh>
 
       {/* Enhanced turbine generators with detailed components */}
       <group>
-        {Array.from({ length: 3 }, (_, i) => {
+        {Array.from({ length: TURBINE_CONFIG.turbineCount }, (_, i) => {
           const x = (i - 1) * 25
           return (
             <group key={`turbine-complex-${i}`}>
@@ -709,35 +547,35 @@ export function TurbineHall({ exploded = false }: TurbineHallProps) {
       {/* Enhanced overhead crane with detailed trolley system */}
       <group>
         {/* Main crane bridge */}
-        <mesh position={[0, hallHeight - 2, 0]} castShadow>
-          <boxGeometry args={[hallLength - 5, 1.5, 2]} />
+        <mesh position={[0, TURBINE_CONFIG.hallHeight - 2, 0]} castShadow>
+          <boxGeometry args={[TURBINE_CONFIG.hallLength - 5, 1.5, 2]} />
           <meshStandardMaterial color="#E53E3E" roughness={0.4} metalness={0.7} />
         </mesh>
 
         {/* Crane rails */}
-        <mesh position={[0, hallHeight - 2, hallWidth / 2 - 1]} castShadow>
-          <boxGeometry args={[hallLength - 5, 0.5, 0.5]} />
+        <mesh position={[0, TURBINE_CONFIG.hallHeight - 2, TURBINE_CONFIG.hallWidth / 2 - 1]} castShadow>
+          <boxGeometry args={[TURBINE_CONFIG.hallLength - 5, 0.5, 0.5]} />
           <meshStandardMaterial color="#2D3748" roughness={0.3} metalness={0.9} />
         </mesh>
-        <mesh position={[0, hallHeight - 2, -hallWidth / 2 + 1]} castShadow>
-          <boxGeometry args={[hallLength - 5, 0.5, 0.5]} />
+        <mesh position={[0, TURBINE_CONFIG.hallHeight - 2, -TURBINE_CONFIG.hallWidth / 2 + 1]} castShadow>
+          <boxGeometry args={[TURBINE_CONFIG.hallLength - 5, 0.5, 0.5]} />
           <meshStandardMaterial color="#2D3748" roughness={0.3} metalness={0.9} />
         </mesh>
 
         {/* Crane trolley */}
-        <mesh position={[10, hallHeight - 3, 0]} castShadow>
+        <mesh position={[10, TURBINE_CONFIG.hallHeight - 3, 0]} castShadow>
           <boxGeometry args={[3, 1, 1.5]} />
           <meshStandardMaterial color="#4A5568" roughness={0.4} metalness={0.8} />
         </mesh>
 
         {/* Crane hook */}
-        <mesh position={[10, hallHeight - 8, 0]} castShadow>
+        <mesh position={[10, TURBINE_CONFIG.hallHeight - 8, 0]} castShadow>
           <cylinderGeometry args={[0.3, 0.3, 1, 8]} />
           <meshStandardMaterial color="#1A202C" roughness={0.3} metalness={0.9} />
         </mesh>
 
         {/* Crane cables */}
-        <mesh position={[10, hallHeight - 5.5, 0]} castShadow>
+        <mesh position={[10, TURBINE_CONFIG.hallHeight - 5.5, 0]} castShadow>
           <cylinderGeometry args={[0.05, 0.05, 5, 8]} />
           <meshStandardMaterial color="#2D3748" roughness={0.8} metalness={0.7} />
         </mesh>
@@ -750,13 +588,13 @@ export function TurbineHall({ exploded = false }: TurbineHallProps) {
           const x = (i - 3.5) * 8
           return (
             <group key={`switchgear-${i}`}>
-              <mesh position={[x, 3, hallWidth / 2 - 2]} castShadow receiveShadow>
+              <mesh position={[x, 3, TURBINE_CONFIG.hallWidth / 2 - 2]} castShadow receiveShadow>
                 <boxGeometry args={[2, 6, 1.5]} />
                 <meshStandardMaterial color="#2B6CB0" roughness={0.6} metalness={0.4} />
               </mesh>
 
               {/* Control indicators */}
-              <mesh position={[x, 4, hallWidth / 2 - 1.2]} castShadow>
+              <mesh position={[x, 4, TURBINE_CONFIG.hallWidth / 2 - 1.2]} castShadow>
                 <boxGeometry args={[1.5, 2, 0.1]} />
                 <meshStandardMaterial color="#1A202C" roughness={0.3} metalness={0.8} />
               </mesh>
@@ -765,18 +603,23 @@ export function TurbineHall({ exploded = false }: TurbineHallProps) {
         })}
 
         {/* Cable trays */}
-        <mesh position={[0, hallHeight - 4, hallWidth / 2 - 3]} castShadow>
-          <boxGeometry args={[hallLength - 10, 0.3, 1]} />
+        <mesh position={[0, TURBINE_CONFIG.hallHeight - 4, TURBINE_CONFIG.hallWidth / 2 - 3]} castShadow>
+          <boxGeometry args={[TURBINE_CONFIG.hallLength - 10, 0.3, 1]} />
           <meshStandardMaterial color="#4B5563" roughness={0.7} metalness={0.6} />
         </mesh>
-        <mesh position={[0, hallHeight - 4, -hallWidth / 2 + 3]} castShadow>
-          <boxGeometry args={[hallLength - 10, 0.3, 1]} />
+        <mesh position={[0, TURBINE_CONFIG.hallHeight - 4, -TURBINE_CONFIG.hallWidth / 2 + 3]} castShadow>
+          <boxGeometry args={[TURBINE_CONFIG.hallLength - 10, 0.3, 1]} />
           <meshStandardMaterial color="#4B5563" roughness={0.7} metalness={0.6} />
         </mesh>
 
         {/* Transformer units */}
         {Array.from({ length: 3 }, (_, i) => (
-          <mesh key={`transformer-${i}`} position={[(i - 1) * 25, 2, -hallWidth / 2 + 5]} castShadow receiveShadow>
+          <mesh
+            key={`transformer-${i}`}
+            position={[(i - 1) * 25, 2, -TURBINE_CONFIG.hallWidth / 2 + 5]}
+            castShadow
+            receiveShadow
+          >
             <boxGeometry args={[4, 4, 3]} />
             <meshStandardMaterial color="#718096" roughness={0.5} metalness={0.6} />
           </mesh>
@@ -786,14 +629,14 @@ export function TurbineHall({ exploded = false }: TurbineHallProps) {
       {/* Ventilation and HVAC systems */}
       <group>
         {/* Main ventilation ducts */}
-        <mesh position={[0, hallHeight - 1, 0]} castShadow>
-          <boxGeometry args={[hallLength - 10, 1, 2]} />
+        <mesh position={[0, TURBINE_CONFIG.hallHeight - 1, 0]} castShadow>
+          <boxGeometry args={[TURBINE_CONFIG.hallLength - 10, 1, 2]} />
           <meshStandardMaterial color="#9CA3AF" roughness={0.6} metalness={0.4} />
         </mesh>
 
         {/* Exhaust fans */}
         {Array.from({ length: 4 }, (_, i) => (
-          <mesh key={`fan-${i}`} position={[(i - 1.5) * 15, hallHeight + 1, 0]} castShadow>
+          <mesh key={`fan-${i}`} position={[(i - 1.5) * 15, TURBINE_CONFIG.hallHeight + 1, 0]} castShadow>
             <cylinderGeometry args={[1.5, 1.5, 0.5, 16]} />
             <meshStandardMaterial color="#4B5563" roughness={0.5} metalness={0.7} />
           </mesh>
@@ -801,40 +644,41 @@ export function TurbineHall({ exploded = false }: TurbineHallProps) {
       </group>
     </group>
   )
-}
+})
 
 interface AuxiliaryBlocksProps {
   exploded?: boolean
 }
 
-export function AuxiliaryBlocks({ exploded = false }: AuxiliaryBlocksProps) {
-  const blockCount = 6
-  const blockSpread = 40
-  const minHeight = 8
-  const maxHeight = 20
+export const AuxiliaryBlocks = memo(function AuxiliaryBlocks({ exploded = false }: AuxiliaryBlocksProps) {
+  const explodeOffset = useMemo(() => (exploded ? [0, 0, 15] : [0, 0, 0]), [exploded])
 
-  const explodeOffset = exploded ? [0, 0, 15] : [0, 0, 0]
-
-  // Generate auxiliary building blocks
   const blocks = useMemo(() => {
     const blocks = []
-    for (let i = 0; i < blockCount; i++) {
-      const angle = (i / blockCount) * Math.PI * 2
-      const distance = 25 + Math.random() * blockSpread
+    // Use a stable seed for consistent random generation
+    let seed = 12345
+    const random = () => {
+      seed = (seed * 9301 + 49297) % 233280
+      return seed / 233280
+    }
+
+    for (let i = 0; i < AUX_CONFIG.blockCount; i++) {
+      const angle = (i / AUX_CONFIG.blockCount) * Math.PI * 2
+      const distance = 25 + random() * AUX_CONFIG.blockSpread
       const x = Math.cos(angle) * distance
       const z = Math.sin(angle) * distance
-      const width = 8 + Math.random() * 12
-      const depth = 6 + Math.random() * 10
-      const height = minHeight + Math.random() * (maxHeight - minHeight)
+      const width = 8 + random() * 12
+      const depth = 6 + random() * 10
+      const height = AUX_CONFIG.minHeight + random() * (AUX_CONFIG.maxHeight - AUX_CONFIG.minHeight)
 
       blocks.push({
         position: [x, height / 2, z],
         scale: [width, height, depth],
-        rotation: [0, (Math.random() * Math.PI) / 4, 0],
+        rotation: [0, (random() * Math.PI) / 4, 0],
       })
     }
     return blocks
-  }, [blockCount, blockSpread, minHeight, maxHeight])
+  }, [])
 
   return (
     <group position={explodeOffset}>
@@ -899,4 +743,4 @@ export function AuxiliaryBlocks({ exploded = false }: AuxiliaryBlocksProps) {
       ))}
     </group>
   )
-}
+})
