@@ -1,50 +1,55 @@
-// Web Worker para cálculos geométricos complejos
-self.onmessage = (e) => {
-  const { type, data, messageId } = e.data
+self.onmessage = (event) => {
+  const { id, type, data } = event.data
 
-  switch (type) {
-    case "CALCULATE_FUEL_ASSEMBLIES":
-      const fuelPositions = []
-      for (let i = 0; i < data.count; i++) {
-        const row = Math.floor(i / 13)
-        const col = i % 13
-        const x = (col - 6) * data.spacing
-        const z = (row - 6) * data.spacing
-        const distance = Math.sqrt(x * x + z * z)
-        if (distance <= 7) {
-          fuelPositions.push([x, 0, z])
-        }
-      }
-      self.postMessage({ positions: fuelPositions, messageId })
-      break
+  try {
+    let result
 
-    case "CALCULATE_CONTROL_RODS":
-      const controlRodPositions = []
-      for (let i = 0; i < data.rodCount; i++) {
-        const row = Math.floor(i / 6)
-        const col = i % 6
-        const x = (col - 2.5) * 2.5
-        const z = (row - 3) * 2.5
-        controlRodPositions.push([x, 0, z])
-      }
-      self.postMessage({ positions: controlRodPositions, messageId })
-      break
+    switch (type) {
+      case "calculateFuelAssemblyPositions":
+        result = calculateFuelAssemblyPositions(data.count)
+        break
 
-    case "CALCULATE_RIBS":
-      const ribs = []
-      for (let i = 0; i < data.ribCount; i++) {
-        const angle = (i / data.ribCount) * Math.PI * 2
-        const x = Math.cos(angle) * (data.diameter / 2 + 0.3)
-        const z = Math.sin(angle) * (data.diameter / 2 + 0.3)
-        ribs.push({
-          position: [x, data.diameter / 2, z],
-          rotation: [0, angle, 0],
-        })
-      }
-      self.postMessage({ ribs, messageId })
-      break
+      case "calculateCoolingLoopPositions":
+        result = calculateCoolingLoopPositions(data.loopCount, data.radius)
+        break
 
-    default:
-      console.warn("Unknown worker message type:", type)
+      default:
+        throw new Error(`Unknown calculation type: ${type}`)
+    }
+
+    self.postMessage({ id, result })
+  } catch (error) {
+    self.postMessage({ id, result: null, error: error.message })
   }
+}
+
+function calculateFuelAssemblyPositions(count) {
+  const positions = []
+
+  for (let i = 0; i < count; i++) {
+    const row = Math.floor(i / 13)
+    const col = i % 13
+    const x = (col - 6) * 1.2
+    const z = (row - 6) * 1.2
+    const distance = Math.sqrt(x * x + z * z)
+
+    if (distance <= 7) {
+      positions.push([x, 0, z])
+    }
+  }
+
+  return positions
+}
+
+function calculateCoolingLoopPositions(loopCount, radius) {
+  const positions = []
+
+  for (let i = 0; i < loopCount; i++) {
+    const angle = (i / loopCount) * Math.PI * 2
+    const x = Math.cos(angle) * radius
+    const z = Math.sin(angle) * radius
+    positions.push([x, 0, z])
+  }
+
+  return positions
 }

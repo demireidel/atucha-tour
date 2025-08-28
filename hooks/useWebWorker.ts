@@ -1,145 +1,121 @@
 "use client"
 
-import { useEffect, useRef, useState, useCallback } from "react"
-import { workerScript } from "@/workers/geometryWorker"
+import { useRef, useEffect, useCallback } from "react"
 
-interface UseWebWorkerReturn {
-  postMessage: (message: any, callback?: (data: any) => void) => void
-  terminate: () => void
-  isReady: boolean
-  error: string | null
+interface WebWorkerMessage {
+  id: string
+  type: string
+  data: any
 }
 
-export function useWebWorker(workerUrl?: string): UseWebWorkerReturn {
+interface WebWorkerResponse {
+  id: string
+  result: any
+  error?: string
+}
+
+export function useWebWorker(workerScript: string) {
   const workerRef = useRef<Worker | null>(null)
-  const callbacksRef = useRef<Map<string, (data: any) => void>>(new Map())
-  const [isReady, setIsReady] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const callbacksRef = useRef<Map<string, (result: any, error?: string) => void>>(new Map())
 
   useEffect(() => {
-    try {
-      // Create worker from script string if no URL provided
-      if (!workerUrl) {
-        const blob = new Blob([workerScript], { type: "application/javascript" })
-        const url = URL.createObjectURL(blob)
-        workerRef.current = new Worker(url)
-      } else {
-        workerRef.current = new Worker(workerUrl)
-      }
+    if (typeof Worker !== "undefined") {
+      workerRef.current = new Worker(workerScript)
 
-      const worker = workerRef.current
-
-      worker.onmessage = (e) => {
-        const { messageId, ...data } = e.data
-        if (messageId && callbacksRef.current.has(messageId)) {
-          const callback = callbacksRef.current.get(messageId)
-          if (callback) {
-            callback(data)
-            callbacksRef.current.delete(messageId)
-          }
+      workerRef.current.onmessage = (event: MessageEvent<WebWorkerResponse>) => {
+        const { id, result, error } = event.data
+        const callback = callbacksRef.current.get(id)
+        if (callback) {
+          callback(result, error)
+          callbacksRef.current.delete(id)
         }
       }
 
-      worker.onerror = (e) => {
-        console.error("Worker error:", e)
-        setError(e.message)
-        setIsReady(false)
+      workerRef.current.onerror = (error) => {
+        console.error("[v0] Web Worker error:", error)
       }
-
-      worker.onmessageerror = (e) => {
-        console.error("Worker message error:", e)
-        setError("Worker message error")
-        setIsReady(false)
-      }
-
-      setIsReady(true)
-      setError(null)
-
-      return () => {
-        if (workerRef.current) {
-          workerRef.current.terminate()
-          workerRef.current = null
-        }
-        callbacksRef.current.clear()
-        setIsReady(false)
-      }
-    } catch (err) {
-      console.error("Failed to create worker:", err)
-      setError(err instanceof Error ? err.message : "Failed to create worker")
-      setIsReady(false)
     }
-  }, [workerUrl])
 
-  const postMessage = useCallback(
-    (message: any, callback?: (data: any) => void) => {
-      if (!workerRef.current || !isReady) {
-        console.warn("Worker not ready")
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate()
+        workerRef.current = null
+      }
+      callbacksRef.current.clear()
+    }
+  }, [workerScript])
+
+  const postMessage = useCallback((type: string, data: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        reject(new Error("Web Worker not available"))
         return
       }
 
-      const messageId = callback ? `msg_${Date.now()}_${Math.random()}` : undefined
+      const id = Math.random().toString(36).substr(2, 9)
 
-      if (callback && messageId) {
-        callbacksRef.current.set(messageId, callback)
-      }
+      callbacksRef.current.set(id, (result, error) => {
+        if (error) {
+          reject(new Error(error))
+        } else {
+          resolve(result)
+        }
+      })
 
-      workerRef.current.postMessage({ ...message, messageId })
-    },
-    [isReady],
-  )
-
-  const terminate = useCallback(() => {
-    if (workerRef.current) {
-      workerRef.current.terminate()
-      workerRef.current = null
-      callbacksRef.current.clear()
-      setIsReady(false)
-    }
+      const message: WebWorkerMessage = { id, type, data }
+      workerRef.current.postMessage(message)
+    })
   }, [])
 
-  return {
-    postMessage,
-    terminate,
-    isReady,
-    error,
-  }
+  return { postMessage, isSupported: typeof Worker !== "undefined" }
 }
 
-// Hook específico para cálculos geométricos
 export function useGeometryWorker() {
-  const { postMessage, isReady, error, terminate } = useWebWorker()
+  const { postMessage, isSupported } = useWebWorker("/workers/geometryWorker.js")
 
-  const calculateFuelAssemblies = useCallback(
-    (count: number, spacing: number, callback: (positions: number[][]) => void) => {
-      postMessage({ type: "CALCULATE_FUEL_ASSEMBLIES", data: { count, spacing } }, (data) => callback(data.positions))
+  const calculateFuelAssemblyPositions = useCallback(
+    async (count: number) => {
+      if (!isSupported) {
+        const positions = []
+        for (let i = 0; i < count; i++) {
+          const row = Math.floor(i / 13)
+          const col = i % 13
+          const x = (col - 6) * 1.2
+          const z = (row - 6) * 1.2
+          const distance = Math.sqrt(x * x + z * z)
+          if (distance <= 7) {
+            positions.push([x, 0, z])
+          }
+        }
+        return positions
+      }
+
+      return postMessage("calculateFuelAssemblyPositions", { count })
     },
-    [postMessage],
+    [postMessage, isSupported],
   )
 
-  const calculateControlRods = useCallback(
-    (rodCount: number, callback: (positions: number[][]) => void) => {
-      postMessage({ type: "CALCULATE_CONTROL_RODS", data: { rodCount } }, (data) => callback(data.positions))
-    },
-    [postMessage],
-  )
+  const calculateCoolingLoopPositions = useCallback(
+    async (loopCount: number, radius: number) => {
+      if (!isSupported) {
+        const positions = []
+        for (let i = 0; i < loopCount; i++) {
+          const angle = (i / loopCount) * Math.PI * 2
+          const x = Math.cos(angle) * radius
+          const z = Math.sin(angle) * radius
+          positions.push([x, 0, z])
+        }
+        return positions
+      }
 
-  const calculateRibs = useCallback(
-    (
-      ribCount: number,
-      diameter: number,
-      callback: (ribs: Array<{ position: number[]; rotation: number[] }>) => void,
-    ) => {
-      postMessage({ type: "CALCULATE_RIBS", data: { ribCount, diameter } }, (data) => callback(data.ribs))
+      return postMessage("calculateCoolingLoopPositions", { loopCount, radius })
     },
-    [postMessage],
+    [postMessage, isSupported],
   )
 
   return {
-    calculateFuelAssemblies,
-    calculateControlRods,
-    calculateRibs,
-    isReady,
-    error,
-    terminate,
+    calculateFuelAssemblyPositions,
+    calculateCoolingLoopPositions,
+    isSupported,
   }
 }

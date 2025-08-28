@@ -1,16 +1,12 @@
 "use client"
 
-import type React from "react"
-
 import { Suspense, useState } from "react"
 import dynamic from "next/dynamic"
 import { Canvas } from "@react-three/fiber"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Play, Clock, Users, Shield, Zap, Building, AlertTriangle, Loader2 } from "lucide-react"
-import { Scene3DErrorBoundary } from "@/components/Scene3DErrorBoundary"
-import { usePerformanceMonitor } from "@/hooks/usePerformanceMonitor"
+import { Play, Clock, Users, Shield, Zap, Building } from "lucide-react"
 
 const AtuchaScene = dynamic(() => import("@/components/AtuchaScene"), { ssr: false })
 
@@ -67,97 +63,39 @@ const TOURS = [
 export default function HomePage() {
   const [selectedTour, setSelectedTour] = useState<string | null>(null)
   const [isInTour, setIsInTour] = useState(false)
-  const [isSceneLoading, setIsSceneLoading] = useState(false)
-  const { fps, memoryUsage } = usePerformanceMonitor()
 
   const startTour = (tourId: string) => {
     setSelectedTour(tourId)
     setIsInTour(true)
-    setIsSceneLoading(true)
   }
 
   const exitTour = () => {
     setSelectedTour(null)
     setIsInTour(false)
-    setIsSceneLoading(false)
-  }
-
-  const handleKeyDown = (event: React.KeyboardEvent, tourId: string) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault()
-      startTour(tourId)
-    }
   }
 
   if (isInTour) {
     return (
       <main className="relative h-screen w-full overflow-hidden bg-background">
-        <Scene3DErrorBoundary
-          fallback={
-            <div className="flex items-center justify-center h-full bg-gray-900 text-white">
-              <div className="text-center">
-                <AlertTriangle className="h-16 w-16 text-yellow-500 mx-auto mb-4" />
-                <h2 className="text-xl font-bold mb-2">Error en la visualización 3D</h2>
-                <p className="text-gray-300 mb-4 max-w-md">
-                  Hubo un problema al cargar la escena 3D. Esto puede deberse a limitaciones de hardware o problemas de
-                  compatibilidad con WebGL.
-                </p>
-                <div className="space-y-2">
-                  <Button onClick={exitTour} variant="secondary">
-                    Volver al Inicio
-                  </Button>
-                  <p className="text-sm text-gray-400">
-                    FPS: {fps} | Memoria: {memoryUsage.toFixed(1)}MB
-                  </p>
-                </div>
-              </div>
-            </div>
-          }
+        <Canvas
+          shadows
+          camera={{ position: [50, 30, 50], fov: 50 }}
+          gl={{
+            antialias: true,
+            alpha: false,
+            powerPreference: "high-performance",
+          }}
         >
-          {isSceneLoading && (
-            <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-20">
-              <div className="text-center">
-                <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Cargando Experiencia 3D</h3>
-                <p className="text-muted-foreground">Preparando el tour virtual...</p>
-              </div>
-            </div>
-          )}
-
-          <Canvas
-            shadows
-            camera={{ position: [50, 30, 50], fov: 50 }}
-            gl={{
-              antialias: true,
-              alpha: false,
-              powerPreference: "high-performance",
-            }}
-            onCreated={() => setIsSceneLoading(false)}
-          >
-            <Suspense fallback={null}>
-              <AtuchaScene tourId={selectedTour} />
-            </Suspense>
-          </Canvas>
-        </Scene3DErrorBoundary>
+          <Suspense fallback={null}>
+            <AtuchaScene tourId={selectedTour} />
+          </Suspense>
+        </Canvas>
 
         <div className="absolute top-4 left-4 z-10">
           <Button onClick={exitTour} variant="secondary">
             Salir del Tour
           </Button>
         </div>
-
-        {process.env.NODE_ENV === "development" && (
-          <div className="absolute top-4 right-4 z-10">
-            <Card className="bg-card/90 backdrop-blur-sm">
-              <CardContent className="p-2">
-                <div className="text-xs space-y-1">
-                  <div>FPS: {fps}</div>
-                  <div>Memoria: {memoryUsage.toFixed(1)}MB</div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         <div className="absolute bottom-4 left-4 right-4 z-10">
           <Card className="bg-card/90 backdrop-blur-sm">
@@ -184,7 +122,7 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-background">
       <section className="relative h-screen flex items-center justify-center bg-gradient-to-br from-primary/10 to-accent/10">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-900 to-slate-700 opacity-20" />
+        <div className="absolute inset-0 bg-[url('/atucha-nuclear-power-plant-exterior.png')] bg-cover bg-center opacity-20" />
         <div className="relative z-10 text-center max-w-4xl mx-auto px-6">
           <h1 className="font-display font-bold text-5xl md:text-7xl mb-6 text-balance">
             Explorá la Maravilla de Ingeniería de <span className="text-primary">Atucha II</span>
@@ -215,14 +153,7 @@ export default function HomePage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {TOURS.map((tour) => (
-              <Card
-                key={tour.id}
-                className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-1"
-                tabIndex={0}
-                role="button"
-                aria-label={`Comenzar tour: ${tour.title}`}
-                onKeyDown={(e) => handleKeyDown(e, tour.id)}
-              >
+              <Card key={tour.id} className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
                 <CardHeader>
                   <div className="flex items-center justify-between mb-2">
                     <div className="p-2 bg-primary/10 rounded-lg text-primary">{tour.icon}</div>
@@ -249,11 +180,7 @@ export default function HomePage() {
                       </div>
                     </div>
 
-                    <Button
-                      className="w-full"
-                      onClick={() => startTour(tour.id)}
-                      aria-describedby={`tour-${tour.id}-description`}
-                    >
+                    <Button className="w-full" onClick={() => startTour(tour.id)}>
                       Comenzar Tour
                     </Button>
                   </div>

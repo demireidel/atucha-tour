@@ -1,55 +1,37 @@
 "use client"
 
-import { useRef, useEffect, useCallback, useMemo } from "react"
+import { useRef, useEffect } from "react"
 import { useFrame, useThree } from "@react-three/fiber"
-import { OrbitControls, Environment, ContactShadows, Sky } from "@react-three/drei"
+import { OrbitControls, Environment, ContactShadows } from "@react-three/drei"
 import { useAppStore } from "@/lib/store"
-import { LazyReactorBuilding, LazyTurbineHall, LazyAuxiliaryBlocks } from "./LazyAtuchaModel"
+import { OptimizedAtuchaModel } from "./OptimizedAtuchaModel"
 import { Switchyard } from "./Switchyard"
 import { WaterAndTerrain } from "./WaterAndTerrain"
 import { TOURS, getTourAtProgress } from "@/lib/tours"
-import * as THREE from "three"
+import type * as THREE from "three"
 
 interface AtuchaSceneProps {
   tourId?: string | null
 }
 
 export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
-  const { camera, gl } = useThree()
+  const { camera } = useThree()
   const { layers, sunPosition, environmentPreset, quality, exploded, tourProgress, setTourProgress } = useAppStore()
   const lightRef = useRef<THREE.DirectionalLight>(null)
   const controlsRef = useRef<any>(null)
   const tourStartTimeRef = useRef<number>(0)
   const isInTourRef = useRef<boolean>(false)
+  const frameCountRef = useRef<number>(0)
+  const lastFpsCheckRef = useRef<number>(Date.now())
   const isMountedRef = useRef<boolean>(true)
-  const performanceRef = useRef({ fps: 60, triangles: 0 })
-
-  const shadowMapSize = useMemo(() => {
-    return quality === "high" ? 4096 : quality === "medium" ? 2048 : 1024
-  }, [quality])
-
-  const sunPositionVector = useMemo(() => {
-    const angle = sunPosition * Math.PI * 2 - Math.PI / 2
-    return [Math.cos(angle) * 100, Math.sin(angle) * 50 + 20, Math.sin(angle) * 30]
-  }, [sunPosition])
 
   useEffect(() => {
-    gl.shadowMap.enabled = true
-    gl.shadowMap.type = THREE.PCFSoftShadowMap
-    gl.toneMapping = THREE.ACESFilmicToneMapping
-    gl.toneMappingExposure = 1.2
-    gl.outputColorSpace = THREE.SRGBColorSpace
+    isMountedRef.current = true
 
-    // Optimizaciones adicionales basadas en calidad
-    if (quality === "low") {
-      gl.setPixelRatio(Math.min(window.devicePixelRatio, 1))
-      gl.shadowMap.enabled = false
-    } else if (quality === "medium") {
-      gl.setPixelRatio(Math.min(window.devicePixelRatio, 1.5))
-    } else {
-      gl.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    return () => {
+      isMountedRef.current = false
     }
-  }, [gl, quality])
+  }, [])
 
   useEffect(() => {
     if (tourId) {
@@ -71,87 +53,73 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
     }
   }, [tourId, setTourProgress])
 
-  useEffect(() => {
-    isMountedRef.current = true
-    return () => {
-      isMountedRef.current = false
+  useFrame((state, deltaTime) => {
+    if (!isMountedRef.current) return
+
+    // Skip expensive operations if frame time is too high (< 30 FPS)
+    const skipFrame = deltaTime > 0.033
+
+    // Performance monitoring
+    frameCountRef.current++
+    const now = Date.now()
+    if (now - lastFpsCheckRef.current > 1000) {
+      const fps = frameCountRef.current
+      frameCountRef.current = 0
+      lastFpsCheckRef.current = now
+
+      // Log performance in development
+      if (process.env.NODE_ENV === "development") {
+        console.log(`[v0] FPS: ${fps}, Frame time: ${(deltaTime * 1000).toFixed(1)}ms`)
+      }
     }
-  }, [])
 
-  const currentTour = useMemo(() => {
-    return tourId ? TOURS.find((t) => t.id === tourId) : null
-  }, [tourId])
+    // Animate sun position (skip if performance is poor)
+    if (lightRef.current && !skipFrame) {
+      const angle = sunPosition * Math.PI * 2 - Math.PI / 2
+      lightRef.current.position.set(Math.cos(angle) * 100, Math.sin(angle) * 50 + 20, 0)
+    }
 
-  useFrame(
-    useCallback(
-      (state) => {
-        // Early return if component is unmounted
-        if (!isMountedRef.current) return
+    // Handle tour animation
+    if (isInTourRef.current && tourId) {
+      const currentTour = TOURS.find((t) => t.id === tourId)
+      if (currentTour) {
+        const elapsed = (Date.now() - tourStartTimeRef.current) / 1000 // Convert to seconds
+        const progress = Math.min(elapsed / currentTour.totalDuration, 1)
 
-        const deltaTime = state.clock.getDelta()
-        const skipFrame = deltaTime > 0.033 // Skip if frame time > 33ms (30 FPS)
+        setTourProgress(progress)
 
-        performanceRef.current.triangles = state.gl.info.render.triangles
+        const tourState = getTourAtProgress(currentTour, progress)
 
-        if (lightRef.current && !skipFrame) {
-          const [targetX, targetY, targetZ] = sunPositionVector
-          lightRef.current.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 0.02)
-        }
+        // Smoothly move camera (always do this for tours)
+        camera.position.lerp(tourState.position, 0.02)
+        camera.lookAt(tourState.target)
 
-        // Handle tour animation
-        if (isInTourRef.current && tourId && currentTour && !skipFrame) {
-          const elapsed = (Date.now() - tourStartTimeRef.current) / 1000
-          const progress = Math.min(elapsed / currentTour.totalDuration, 1)
-
-          setTourProgress(progress)
-
-          const tourState = getTourAtProgress(currentTour, progress)
-
-          // Smoothly move camera
-          camera.position.lerp(tourState.position, 0.02)
-          camera.lookAt(tourState.target)
-
-          // Update camera matrix
-          camera.updateMatrixWorld()
-        }
-      },
-      [sunPositionVector, tourId, currentTour, camera, setTourProgress],
-    ),
-  )
+        // Update camera matrix
+        camera.updateMatrixWorld()
+      }
+    }
+  })
 
   return (
     <>
-      <ambientLight intensity={0.3} color="#87CEEB" />
+      {/* Lighting */}
+      <ambientLight intensity={0.4} />
       <directionalLight
         ref={lightRef}
-        intensity={2.5}
-        color="#FFF8DC"
+        intensity={1.2}
         castShadow={quality !== "low"}
-        shadow-mapSize-width={shadowMapSize}
-        shadow-mapSize-height={shadowMapSize}
-        shadow-camera-far={300}
-        shadow-camera-left={-150}
-        shadow-camera-right={150}
-        shadow-camera-top={150}
-        shadow-camera-bottom={-150}
-        shadow-bias={-0.0005}
-        shadow-normalBias={0.02}
+        shadow-mapSize-width={quality === "high" ? 2048 : 1024}
+        shadow-mapSize-height={quality === "high" ? 2048 : 1024}
+        shadow-camera-far={200}
+        shadow-camera-left={-100}
+        shadow-camera-right={100}
+        shadow-camera-top={100}
+        shadow-camera-bottom={-100}
+        shadow-bias={-0.0001}
       />
 
-      <directionalLight position={[-50, 20, 50]} intensity={0.8} color="#B0E0E6" castShadow={false} />
-
-      <Sky
-        distance={450000}
-        sunPosition={sunPositionVector}
-        inclination={0.49}
-        azimuth={0.25}
-        turbidity={8}
-        rayleigh={6}
-        mieCoefficient={0.005}
-        mieDirectionalG={0.8}
-      />
-
-      <Environment preset={environmentPreset} background={false} environmentIntensity={0.6} />
+      {/* Environment */}
+      <Environment preset={environmentPreset} />
 
       {/* Controls - disabled during tours */}
       {!tourId && (
@@ -169,21 +137,12 @@ export default function AtuchaScene({ tourId }: AtuchaSceneProps) {
       )}
 
       {layers.terrain && <WaterAndTerrain exploded={exploded} />}
-      {layers.reactor && <LazyReactorBuilding exploded={exploded} quality={quality} useOptimized={quality === "low"} />}
-      {layers.turbineHall && <LazyTurbineHall exploded={exploded} />}
-      {layers.auxiliary && <LazyAuxiliaryBlocks exploded={exploded} />}
+      <OptimizedAtuchaModel exploded={exploded} quality={quality} />
       {layers.switchyard && <Switchyard exploded={exploded} />}
 
+      {/* Contact shadows for better ground connection */}
       {quality !== "low" && (
-        <ContactShadows
-          position={[0, -0.9, 0]}
-          opacity={0.6}
-          scale={120}
-          blur={quality === "high" ? 3 : quality === "medium" ? 2 : 1}
-          far={80}
-          resolution={quality === "high" ? 1024 : 512}
-          color="#1a1a1a"
-        />
+        <ContactShadows position={[0, -0.9, 0]} opacity={0.4} scale={100} blur={quality === "high" ? 2 : 1} far={50} />
       )}
     </>
   )

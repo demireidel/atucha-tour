@@ -4,29 +4,45 @@ export const REACTOR_CONFIG = {
   domeHeight: 12,
   ribCount: 16,
   ringCount: 6,
-  fuelAssemblies: 157,
-  controlRods: 37,
+  fuelAssemblyCount: 157,
+  controlRodCount: 37,
+  coolingLoopCount: 4,
 } as const
 
-export const TURBINE_CONFIG = {
-  hallLength: 80,
-  hallWidth: 25,
-  hallHeight: 18,
+export const TURBINE_HALL_CONFIG = {
+  length: 80,
+  width: 25,
+  height: 18,
   skylightCount: 8,
   roofPitch: 0.1,
   turbineCount: 3,
 } as const
 
-export const AUX_CONFIG = {
-  blockCount: 6,
-  blockSpread: 40,
-  minHeight: 8,
-  maxHeight: 20,
+export const PERFORMANCE_CONFIG = {
+  targetFPS: 60,
+  maxFrameTime: 33, // ms (30 FPS threshold)
+  qualityLevels: {
+    low: {
+      shadowMapSize: 512,
+      maxDetails: 50,
+      enablePostProcessing: false,
+    },
+    medium: {
+      shadowMapSize: 1024,
+      maxDetails: 100,
+      enablePostProcessing: true,
+    },
+    high: {
+      shadowMapSize: 2048,
+      maxDetails: 200,
+      enablePostProcessing: true,
+    },
+  },
 } as const
 
-export const PERFORMANCE_CONFIG = {
-  maxFPS: 60,
-  targetFPS: 30,
-  lowQualityThreshold: 25,
-  memoryWarningThreshold: 100 * 1024 * 1024, // 100MB
+export const TOUR_CONFIG = {
+  interpolationSpeed: 0.02,
+  cameraLerpFactor: 0.02,
+  minTourDuration: 8 * 60, // 8 minutes in seconds
+  maxTourDuration: 25 * 60, // 25 minutes in seconds
 } as const
